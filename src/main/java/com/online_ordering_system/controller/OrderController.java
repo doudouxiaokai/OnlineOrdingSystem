@@ -1,74 +1,143 @@
 package com.online_ordering_system.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.online_ordering_system.domain.Dish;
-import com.online_ordering_system.domain.Order;
-import com.online_ordering_system.domain.Restaurant;
-import com.online_ordering_system.mapper.DishMapper;
-import com.online_ordering_system.mapper.OrderMapper;
-import com.online_ordering_system.mapper.RestaurantMapper; // 1. 引入刚刚那个空的 RestaurantMapper
+import com.online_ordering_system.domain.*;
+import com.online_ordering_system.mapper.*;
 import com.online_ordering_system.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*")
-@RequiredArgsConstructor // 自动为下方所有的 final 属性生成构造方法，实现自动注入
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {
+        RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE
+})
+@RequiredArgsConstructor
 public class OrderController {
 
     private final DishMapper dishMapper;
     private final OrderService orderService;
     private final OrderMapper orderMapper;
-    private final RestaurantMapper restaurantMapper; // 2. 在这里声明它，Spring 会自动把它注入进来
+    private final RestaurantMapper restaurantMapper;
+    private final UserAddressMapper userAddressMapper;
+    private final OrderReviewMapper orderReviewMapper;
 
-    // 🌟 3. 补充缺少的餐厅列表接口（对应设计方案中的“浏览附近餐厅列表”功能）
+    /* ================= 工具方法（不新增文件） ================= */
+
+    private ResponseEntity<Map<String, Object>> error(String msg) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", msg);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+    }
+
+    /* ================= 餐厅 & 菜品 ================= */
+
     @GetMapping("/restaurants")
     public List<Restaurant> getRestaurants() {
-        // 虽然 RestaurantMapper 是空的，但可以直接调用继承来的 selectList 方法
-        // 传入一个空的 LambdaQueryWrapper 代表“没有任何条件，查询全表”
         return restaurantMapper.selectList(new LambdaQueryWrapper<>());
     }
 
-    // 4. 访客/顾客 浏览特定餐厅的菜品详情
     @GetMapping("/dishes")
     public List<Dish> getDishes(@RequestParam String restaurantId) {
-        return dishMapper.selectList(new LambdaQueryWrapper<Dish>().eq(Dish::getRestaurantId, restaurantId));
+        return dishMapper.selectList(
+                new LambdaQueryWrapper<Dish>().eq(Dish::getRestaurantId, restaurantId)
+        );
     }
 
-    // 5. 顾客提单结算 (锁扣本地库存)
+    /* ================= 订单创建（✅ 已修复） ================= */
+
     @PostMapping("/orders")
-    public Map<String, Object> createOrder(@RequestBody Map<String, Object> params) {
-        String userId = "u123";
+    public ResponseEntity<Map<String, Object>> createOrder(@RequestBody Map<String, Object> params) {
+        String userId = (String) params.get("userId");
         String restaurantId = (String) params.get("restaurantId");
         List<Map<String, Object>> items = (List<Map<String, Object>>) params.get("items");
+        String address = (String) params.get("address");
 
-        Order order = orderService.createOrder(userId, restaurantId, items);
+        try {
+            Order order = orderService.createOrder(userId, restaurantId, items, address);
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("orderId", order.getOrderId());
-        result.put("totalAmount", order.getTotalAmount());
-        return result;
+            Map<String, Object> result = new HashMap<>();
+            result.put("orderId", order.getOrderId());
+            result.put("totalAmount", order.getTotalAmount());
+            return ResponseEntity.ok(result);
+
+        } catch (RuntimeException e) {
+            // ✅ 库存不足 / 菜品不存在 都会走这里
+            return error(e.getMessage());
+        }
     }
 
-    // 6. 结算页个性化推荐菜品
+    /* ================= 订单流转 ================= */
+
+    @PostMapping("/orders/advance")
+    public ResponseEntity<?> advanceOrder(@RequestBody Map<String, String> params) {
+        try {
+            Order order = orderService.transitionToNextStatus(params.get("orderId"));
+            return ResponseEntity.ok(order);
+        } catch (RuntimeException e) {
+            return error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/orders/list")
+    public List<Order> listOrders(@RequestParam String userId) {
+        return orderMapper.selectList(
+                new LambdaQueryWrapper<Order>()
+                        .eq(Order::getUserId, userId)
+                        .orderByDesc(Order::getCreatedAt)
+        );
+    }
+
+    @GetMapping("/orders/track")
+    public Order trackOrder(@RequestParam String orderId) {
+        return orderMapper.selectById(orderId);
+    }
+
+    /* ================= 地址管理 ================= */
+
+    @GetMapping("/address")
+    public List<UserAddress> getUserAddresses(@RequestParam String userId) {
+        return userAddressMapper.selectList(
+                new LambdaQueryWrapper<UserAddress>().eq(UserAddress::getUserId, userId)
+        );
+    }
+
+    @PostMapping("/address/save")
+    public String saveAddress(@RequestBody UserAddress userAddress) {
+        if (userAddress.getAddressId() == null || userAddress.getAddressId().isEmpty()) {
+            userAddress.setAddressId(java.util.UUID.randomUUID().toString().replace("-", ""));
+            userAddressMapper.insert(userAddress);
+        } else {
+            userAddressMapper.updateById(userAddress);
+        }
+        return "SUCCESS";
+    }
+
+    /* ================= 评价 ================= */
+
+    @PostMapping("/reviews")
+    public String submitReview(@RequestBody OrderReview review) {
+        orderService.submitReview(review);
+        return "SUCCESS";
+    }
+
+    @GetMapping("/reviews/restaurant")
+    public List<OrderReview> getRestaurantReviews(@RequestParam String restaurantId) {
+        return orderReviewMapper.selectList(
+                new LambdaQueryWrapper<OrderReview>()
+                        .eq(OrderReview::getRestaurantId, restaurantId)
+                        .orderByDesc(OrderReview::getCreatedAt)
+        );
+    }
     @GetMapping("/recommendations")
     public List<Dish> getPersonalizedDishes(@RequestParam String userId) {
         return dishMapper.selectList(new LambdaQueryWrapper<Dish>().last("LIMIT 2"));
     }
 
-    // 7. 订单实时状态跟踪轮询
-    @GetMapping("/orders/track")
-    public Order trackOrder(@RequestParam String orderId) {
-        Order order = orderMapper.selectById(orderId);
-        if (order != null && "PREPARING".equals(order.getStatus())) {
-            order.setStatus("DELIVERING");
-            order.setRiderName("顺丰同城专送-张兵");
-            order.setRiderPhone("13888888888");
-            orderMapper.updateById(order);
-        }
-        return order;
-    }
 }
