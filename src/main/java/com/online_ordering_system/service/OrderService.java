@@ -22,6 +22,7 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final RestaurantMapper restaurantMapper;
     private final OrderReviewMapper orderReviewMapper;
+    private final OrderItemMapper orderItemMapper;
 
     private final List<Map<String, String>> VIRTUAL_RIDERS = Arrays.asList(
             new HashMap<String, String>() {{ put("name", "张小哥"); put("phone", "13911112222"); }},
@@ -62,17 +63,33 @@ public class OrderService {
 
         Order order = new Order();
         order.setOrderId(UUID.randomUUID().toString().replace("-", ""));
-        order.setOrderNo(System.currentTimeMillis() + "_" + userId);
+        order.setOrderNo(String.valueOf(System.currentTimeMillis()));
         order.setUserId(userId);
         order.setRestaurantId(restaurantId);
         order.setTotalAmount(totalAmount);
         order.setStatus("PREPARING");
-        order.setAddress(address); // ✅ 已经在 Order.java 补了字段，现在这里编译百分百通过！
+        order.setAddress(address);
         order.setCreatedAt(LocalDateTime.now());
 
         orderMapper.insert(order);
+
+        for (Map<String, Object> itemReq : items) {
+            String dishId = (String) itemReq.get("dishId");
+            int quantity = ((Number) itemReq.get("quantity")).intValue();
+            Dish dish = dishMapper.selectById(dishId);
+
+            OrderItem orderItem = new OrderItem();
+            orderItem.setItemId(UUID.randomUUID().toString().replace("-", ""));
+            orderItem.setOrderId(order.getOrderId()); // 关键修复：绑定主订单ID
+            orderItem.setDishId(dishId);
+            orderItem.setQuantity(quantity);
+            orderItem.setSubtotal(dish.getPrice().multiply(BigDecimal.valueOf(quantity)));
+
+            orderItemMapper.insert(orderItem);
+        }
         return order;
     }
+
 
     @Transactional(rollbackFor = Exception.class)
     public Order transitionToNextStatus(String orderId) {
