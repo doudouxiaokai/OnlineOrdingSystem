@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan("com.online_ordering_system.mapper") // 扫描下方的Mapper接口
 public class OnlineOrderingSystemApplication {
 
+
     public static void main(String[] args) {
         SpringApplication.run(OnlineOrderingSystemApplication.class, args);
     }

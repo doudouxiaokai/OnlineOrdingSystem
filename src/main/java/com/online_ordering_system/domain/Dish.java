@@ -16,7 +16,9 @@ public class Dish {
     private String category;
     private Integer currentStock;
     private Integer safetyStock;
-
+    private String description;
+    private String image;
+    private Integer sales;
     // 提高版动态定价扩展埋点
     public BigDecimal getPrice(BigDecimal weatherFactor) {
         if (weatherFactor != null) {

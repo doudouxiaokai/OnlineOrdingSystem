@@ -22,21 +22,18 @@ import java.util.Map;
 public class OrderController {
 
     private final DishMapper dishMapper;
+    private final OrderItemMapper orderItemMapper;
     private final OrderService orderService;
     private final OrderMapper orderMapper;
     private final RestaurantMapper restaurantMapper;
     private final UserAddressMapper userAddressMapper;
     private final OrderReviewMapper orderReviewMapper;
 
-    /* ================= 工具方法（不新增文件） ================= */
-
     private ResponseEntity<Map<String, Object>> error(String msg) {
         Map<String, Object> result = new HashMap<>();
         result.put("message", msg);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
     }
-
-    /* ================= 餐厅 & 菜品 ================= */
 
     @GetMapping("/restaurants")
     public List<Restaurant> getRestaurants() {
@@ -50,30 +47,37 @@ public class OrderController {
         );
     }
 
-    /* ================= 订单创建（✅ 已修复） ================= */
-
     @PostMapping("/orders")
     public ResponseEntity<Map<String, Object>> createOrder(@RequestBody Map<String, Object> params) {
-        String userId = (String) params.get("userId");
-        String restaurantId = (String) params.get("restaurantId");
-        List<Map<String, Object>> items = (List<Map<String, Object>>) params.get("items");
-        String address = (String) params.get("address");
-
         try {
-            Order order = orderService.createOrder(userId, restaurantId, items, address);
+            String userId = (String) params.get("userId");
+            String restaurantId = (String) params.get("restaurantId");
+            String address = (String) params.get("address");
+            List<Map<String, Object>> items = (List<Map<String, Object>>) params.get("items");
 
+            List<Map<String, Object>> formattedItems = new java.util.ArrayList<>();
+            if (items != null) {
+                for (Map<String, Object> item : items) {
+                    Map<String, Object> formattedItem = new java.util.HashMap<>();
+                    formattedItem.put("dishId", item.get("dishId"));
+                    Object qtyObj = item.get("quantity");
+                    if (qtyObj == null) qtyObj = item.get("count");
+                    int quantity = qtyObj != null ? Integer.parseInt(qtyObj.toString()) : 1;
+                    formattedItem.put("quantity", quantity);
+                    formattedItems.add(formattedItem);
+                }
+            }
+
+            Order savedOrder = orderService.createOrder(userId, restaurantId, formattedItems, address);
             Map<String, Object> result = new HashMap<>();
-            result.put("orderId", order.getOrderId());
-            result.put("totalAmount", order.getTotalAmount());
+            result.put("orderId", savedOrder.getOrderId());
+            result.put("orderNo", savedOrder.getOrderNo());
             return ResponseEntity.ok(result);
-
-        } catch (RuntimeException e) {
-            // ✅ 库存不足 / 菜品不存在 都会走这里
-            return error(e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return error("下单失败：" + e.getMessage());
         }
     }
-
-    /* ================= 订单流转 ================= */
 
     @PostMapping("/orders/advance")
     public ResponseEntity<?> advanceOrder(@RequestBody Map<String, String> params) {
@@ -85,21 +89,44 @@ public class OrderController {
         }
     }
 
+    /* 订单列表：彻底移除明细，只返回基础信息 */
     @GetMapping("/orders/list")
-    public List<Order> listOrders(@RequestParam String userId) {
-        return orderMapper.selectList(
+    public List<Map<String, Object>> listOrders(@RequestParam String userId) {
+        List<Order> orders = orderMapper.selectList(
                 new LambdaQueryWrapper<Order>()
                         .eq(Order::getUserId, userId)
                         .orderByDesc(Order::getCreatedAt)
         );
+
+        List<Map<String, Object>> resultList = new java.util.ArrayList<>();
+        for (Order order : orders) {
+            Map<String, Object> orderMap = new java.util.HashMap<>();
+            orderMap.put("orderId", order.getOrderId());
+            orderMap.put("orderNo", order.getOrderNo());
+            orderMap.put("status", order.getStatus());
+            orderMap.put("createdAt", order.getCreatedAt());
+            orderMap.put("totalAmount", order.getTotalAmount());
+            orderMap.put("restaurantId", order.getRestaurantId());
+            resultList.add(orderMap);
+        }
+        return resultList;
     }
 
+    /* 订单跟踪：返回明细+菜品名，适配前端track.vue */
     @GetMapping("/orders/track")
     public Order trackOrder(@RequestParam String orderId) {
-        return orderMapper.selectById(orderId);
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) return null;
+        List<OrderItem> orderItems = orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, orderId)
+        );
+        for (OrderItem item : orderItems) {
+            Dish dish = dishMapper.selectById(item.getDishId());
+            item.setDishName(dish != null ? dish.getName() : "未知菜品");
+        }
+        order.setItems(orderItems);
+        return order;
     }
-
-    /* ================= 地址管理 ================= */
 
     @GetMapping("/address")
     public List<UserAddress> getUserAddresses(@RequestParam String userId) {
@@ -119,8 +146,6 @@ public class OrderController {
         return "SUCCESS";
     }
 
-    /* ================= 评价 ================= */
-
     @PostMapping("/reviews")
     public String submitReview(@RequestBody OrderReview review) {
         orderService.submitReview(review);
@@ -135,9 +160,19 @@ public class OrderController {
                         .orderByDesc(OrderReview::getCreatedAt)
         );
     }
+
     @GetMapping("/recommendations")
     public List<Dish> getPersonalizedDishes(@RequestParam String userId) {
         return dishMapper.selectList(new LambdaQueryWrapper<Dish>().last("LIMIT 2"));
     }
 
+    @DeleteMapping("/orders/{orderId}")
+    public ResponseEntity<Map<String, Object>> deleteOrder(@PathVariable String orderId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) return error("订单不存在");
+        orderMapper.deleteById(orderId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "订单删除成功");
+        return ResponseEntity.ok(result);
+    }
 }

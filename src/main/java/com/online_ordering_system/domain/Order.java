@@ -36,9 +36,11 @@ public class Order {
     @TableField("rider_phone")
     private String riderPhone;
 
-    // 🌟 核心补齐：添加 address 属性，映射数据库中的地址字段
     private String address;
 
     @TableField("created_at")
     private LocalDateTime createdAt;
+
+    @TableField(exist = false)
+    private java.util.List<OrderItem> items;
 }

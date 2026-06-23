@@ -19,10 +19,10 @@ public class OrderTimeoutScheduler {
     private final OrderMapper orderMapper;
 
     /**
-     * ✅ 每 30 秒扫描
+     * ✅ 每 300 秒扫描
      * ✅ 只处理 10 分钟前仍未接单的订单
      */
-    @Scheduled(fixedDelay = 30000)
+    @Scheduled(fixedDelay = 300000)
     public void checkDeliveryExceptionOrders() {
 
         LocalDateTime expireTime = LocalDateTime.now().minusMinutes(10);
