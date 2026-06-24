@@ -162,8 +162,15 @@ public class OrderController {
     }
 
     @GetMapping("/recommendations")
-    public List<Dish> getPersonalizedDishes(@RequestParam String userId) {
-        return dishMapper.selectList(new LambdaQueryWrapper<Dish>().last("LIMIT 2"));
+    public List<Dish> getPersonalizedDishes(
+            @RequestParam String userId,
+            @RequestParam String restaurantId) {
+
+        return dishMapper.selectList(
+                new LambdaQueryWrapper<Dish>()
+                        .eq(Dish::getRestaurantId, restaurantId)
+                        .last("ORDER BY RAND() LIMIT 2")
+        );
     }
 
     @DeleteMapping("/orders/{orderId}")

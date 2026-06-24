@@ -51,7 +51,7 @@ public class OrderService {
                     new LambdaUpdateWrapper<Dish>()
                             .eq(Dish::getDishId, dishId)
                             .ge(Dish::getCurrentStock, quantity)
-                            .setSql("current_stock = current_stock - " + quantity)
+                            .setSql("current_stock = current_stock - " + quantity  + ", sales = sales + " + quantity)
             );
 
             if (updatedRows == 0) {
