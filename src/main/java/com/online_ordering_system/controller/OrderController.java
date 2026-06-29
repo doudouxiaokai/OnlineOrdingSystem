@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +49,9 @@ public class OrderController {
         );
     }
 
+    /**
+     * 【修改点】创建订单 -> 此时状态为 UNPAID (待支付)
+     */
     @PostMapping("/orders")
     public ResponseEntity<Map<String, Object>> createOrder(@RequestBody Map<String, Object> params) {
         try {
@@ -54,7 +59,10 @@ public class OrderController {
             String restaurantId = (String) params.get("restaurantId");
             String address = (String) params.get("address");
             List<Map<String, Object>> items = (List<Map<String, Object>>) params.get("items");
+            // 【兼容关键】老版本没传needPay，默认false（自动支付）；新版本传true则走支付流程
+            boolean needPay = Boolean.TRUE.equals(params.get("needPay"));
 
+            // 格式化items的逻辑和之前完全一致，不用改
             List<Map<String, Object>> formattedItems = new java.util.ArrayList<>();
             if (items != null) {
                 for (Map<String, Object> item : items) {
@@ -68,16 +76,87 @@ public class OrderController {
                 }
             }
 
-            Order savedOrder = orderService.createOrder(userId, restaurantId, formattedItems, address);
+            // 把needPay传给Service层
+            Order savedOrder = orderService.createOrder(userId, restaurantId, formattedItems, address, needPay);
             Map<String, Object> result = new HashMap<>();
             result.put("orderId", savedOrder.getOrderId());
             result.put("orderNo", savedOrder.getOrderNo());
+            result.put("totalAmount", savedOrder.getTotalAmount());
+            // 只有新版本需要expireTime，老版本用不到，不用返回
+            if (needPay) {
+                result.put("expireTime", savedOrder.getExpireTime());
+            }
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();
             return error("下单失败：" + e.getMessage());
         }
     }
+
+    /**
+     * 【新增】模拟支付接口
+     */
+    @PostMapping("/orders/pay")
+    public ResponseEntity<Map<String, Object>> payOrder(@RequestBody Map<String, String> params) {
+        try {
+            String orderId = params.get("orderId");
+            String payMethod = params.get("payMethod"); // WECHAT, ALIPAY, BANK_CARD
+
+            Order order = orderService.payOrder(orderId, payMethod);
+            Map<String, Object> result = new HashMap<>();
+            result.put("orderId", order.getOrderId());
+            result.put("status", order.getStatus());
+            return ResponseEntity.ok(result);
+        } catch (IllegalStateException e) {
+            return error(e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return error("支付失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 【新增】用户主动取消订单 / 支付超时后触发
+     */
+    @PostMapping("/orders/cancel")
+    public ResponseEntity<Map<String, Object>> cancelOrder(@RequestBody Map<String, String> params) {
+        try {
+            String orderId = params.get("orderId");
+            String reason = params.get("reason");
+            orderService.cancelOrder(orderId, reason);
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "订单已取消");
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return error("取消失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 【新增】获取待支付订单详情 (主要用于支付页刷新数据)
+     */
+    @GetMapping("/orders/unpaid/{orderId}")
+    public ResponseEntity<?> getUnpaidOrder(@PathVariable String orderId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) return error("订单不存在");
+
+        if (!"UNPAID".equals(order.getStatus())) {
+            return error("订单状态不是待支付");
+        }
+
+        // 计算剩余秒数，供前端倒计时使用
+        long remainSeconds = ChronoUnit.SECONDS.between(LocalDateTime.now(), order.getExpireTime());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("orderId", order.getOrderId());
+        result.put("orderNo", order.getOrderNo());
+        result.put("totalAmount", order.getTotalAmount());
+        result.put("restaurantId", order.getRestaurantId());
+        result.put("remainSeconds", Math.max(remainSeconds, 0));
+
+        return ResponseEntity.ok(result);
+    }
+
 
     @PostMapping("/orders/advance")
     public ResponseEntity<?> advanceOrder(@RequestBody Map<String, String> params) {
