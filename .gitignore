@@ -44,3 +44,4 @@ src/main/resources/application.properties
 ### 系统文件 ###
 .DS_Store
 Thumbs.db
+HELP.md
