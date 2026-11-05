@@ -1,8 +1,9 @@
-HELP.md
+# ==================== Maven / Java 编译产物 ====================
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+*.class
 
 ### STS ###
 .apt_generated
@@ -14,7 +15,7 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -26,8 +27,20 @@ target/
 /nbdist/
 /.nb-gradle/
 build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
+
+### Node / UniApp 前端 ###
+node_modules/
+unpackage/
+dist/
+.hbuilderx/
+
+### 敏感配置：本地真实配置仅留本地，仓库只提交模板 ###
+src/main/resources/application-local.properties
+src/main/resources/application.properties
+
+### 系统文件 ###
+.DS_Store
+Thumbs.db
