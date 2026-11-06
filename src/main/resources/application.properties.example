@@ -1,14 +1,15 @@
-# ==================== 模板配置 ====================
-# 复制本文件为 application-local.properties（已被 .gitignore 忽略），
-# 填入真实密码后即可本地运行。
-
-server.port=8080
-server.address=0.0.0.0
-
-spring.datasource.url=jdbc:mysql://localhost:3306/takeaway_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-spring.datasource.username=root
-spring.datasource.password=<YOUR_DB_PASSWORD>
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
-mybatis-plus.configuration.log-impl=org.apache.ibatis.logging.stdout.StdOutImpl
-mybatis-plus.global-config.db-config.id-type=assign_id
+# ============================================================
+# 配置说明（本文件为模板，仅作参考，不参与启动）
+# ============================================================
+# 项目采用 Spring Boot profiles 双环境配置：
+#   application.yml          —— 公共配置 + 默认激活 local
+#   application-local.yml    —— 本地环境（本机 MySQL，root/123456）
+#   application-remote.yml   —— 远程环境（需自行填服务器地址与密码，已被 .gitignore 忽略）
+#
+# 切换环境的方式（三选一）：
+#   1) 启动参数：  java -jar app.jar --spring.profiles.active=remote
+#   2) IDEA 里：   Run Configuration 的 Program arguments 填 --spring.profiles.active=remote
+#   3) 环境变量：  SPRING_PROFILES_ACTIVE=remote
+#
+# 默认不填就是 local（本地跑，无需任何额外配置）。
+# ============================================================

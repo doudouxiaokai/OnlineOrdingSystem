@@ -21,6 +21,7 @@ public class Order {
     private BigDecimal totalAmount;
     private String status; // UNPAID, PREPARING, DELIVERING, COMPLETED, CANCELLED
     private String address;
+    private String riderId;
     private String riderName;
     private String riderPhone;
 

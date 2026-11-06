@@ -1,4 +1,7 @@
-const BASE_URL = 'https://frp-six.com:61910';
+export const BASE_URL = 'https://frp-six.com:61910';
+
+/** WebSocket 地址：由 HTTP(S) 基地址推导 */
+export const WS_URL = BASE_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/ws/agent';
 
 export const request = (options) => {
   return new Promise((resolve, reject) => {

@@ -1,6 +1,8 @@
-// agent.js - 显示请求体和AI响应，不显示Prompt
-const API_KEY = 'sk-ws-H.RXMPYPH.oGiw.MEUCIQCSnc-WYeNK7tpeuAJ-jPEanZ6LMpdLnKf5aKIgBL5COwIgSlq_avNLCfKc1a2uGKgBCdQGGEYTH5hfcXFyV12NEo8'
-const APP_ID = '4db85e29fa974c2db2149e0b66db5c09'
+// agent.js —— 已废弃：编排逻辑迁移至后端 /api/agent/chat
+// 本文件不再被 chat.vue 引用，仅保留占位，避免历史引用报错。
+// 密钥已移除，LLM 调用全部由后端 AgentController + LlmClient 完成。
+const API_KEY = ''
+const APP_ID = ''
 
 let sessionId = null
 

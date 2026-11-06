@@ -200,8 +200,11 @@ public class OrderController {
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, orderId)
         );
         for (OrderItem item : orderItems) {
-            Dish dish = dishMapper.selectById(item.getDishId());
-            item.setDishName(dish != null ? dish.getName() : "未知菜品");
+            // 优先用下单时保存的菜品名快照；快照为空时才回查 Dish（兼容历史数据）
+            if (item.getDishName() == null || item.getDishName().isEmpty()) {
+                Dish dish = dishMapper.selectById(item.getDishId());
+                item.setDishName(dish != null ? dish.getName() : "未知菜品");
+            }
         }
         order.setItems(orderItems);
         return order;
@@ -236,6 +239,15 @@ public class OrderController {
         return orderReviewMapper.selectList(
                 new LambdaQueryWrapper<OrderReview>()
                         .eq(OrderReview::getRestaurantId, restaurantId)
+                        .orderByDesc(OrderReview::getCreatedAt)
+        );
+    }
+
+    @GetMapping("/reviews/dish")
+    public List<OrderReview> getDishReviews(@RequestParam String dishId) {
+        return orderReviewMapper.selectList(
+                new LambdaQueryWrapper<OrderReview>()
+                        .eq(OrderReview::getDishId, dishId)
                         .orderByDesc(OrderReview::getCreatedAt)
         );
     }

@@ -1,0 +1,7 @@
+# 订餐 Agent 评测/造数/压测脚本依赖
+# 安装：python -m pip install -r requirements.txt
+requests>=2.31
+websocket-client>=1.6
+pymysql>=1.1
+faker>=19.0
+matplotlib>=3.7

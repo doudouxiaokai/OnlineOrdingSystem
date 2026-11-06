@@ -17,6 +17,10 @@
             "style": { "navigationBarTitleText": "商家菜单" }
         },
         {
+            "path": "pages/detail/detail",
+            "style": { "navigationBarTitleText": "菜品详情" }
+        },
+        {
             "path": "pages/login/login",
             "style": { "navigationBarTitleText": "手机号快捷登录" }
         },

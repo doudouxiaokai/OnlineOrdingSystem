@@ -13,10 +13,7 @@ public class OrderItem {
     private String itemId;
     private String orderId;
     private String dishId;
+    private String dishName;   // 下单时的菜品名快照，防止菜品改名/下架后订单明细显示"未知菜品"
     private Integer quantity;
     private BigDecimal subtotal;
-
-    // ✅ 新增：非数据库字段，用于前端显示菜品名称
-    @TableField(exist = false)
-    private String dishName;
 }

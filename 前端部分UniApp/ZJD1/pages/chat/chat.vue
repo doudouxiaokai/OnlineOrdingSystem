@@ -52,8 +52,27 @@
           </view>
         </view>
         
+        <!-- 等待提示 -->
         <view v-if="isWaiting" class="message ai">
           <view class="bubble loading">正在思考...</view>
+        </view>
+
+        <!-- 执行轨迹面板（实时展示计划 DAG 与步骤状态） -->
+        <view v-if="tracePanel && tracePanel.steps.length" class="trace-panel">
+          <view class="trace-header">
+            <text class="trace-title">⚙️ 执行轨迹</text>
+            <text class="trace-status" :class="{ running: tracePanel.status === 'running' }">
+              {{ tracePanel.status === 'running' ? '运行中…' : '已完成' }}
+            </text>
+          </view>
+          <view v-for="s in tracePanel.steps" :key="s.stepId" class="trace-step">
+            <view class="trace-icon" :class="'st-' + (s.status || 'PENDING').toLowerCase()">{{ statusIcon(s.status) }}</view>
+            <view class="trace-body">
+              <text class="trace-tool">{{ s.stepId }} · {{ s.tool }}</text>
+              <text v-if="s.dependsOn && s.dependsOn.length" class="trace-dep">依赖：{{ s.dependsOn.join(', ') }}</text>
+              <text v-if="s.output" class="trace-output">{{ formatOutput(s.output) }}</text>
+            </view>
+          </view>
         </view>
       </view>
     </scroll-view>
@@ -73,7 +92,7 @@
 </template>
 
 <script>
-import { run_agent } from '@/utils/app.js'
+import { sendAgentMessage } from '@/utils/agent-ws.js'
 
 export default {
   data() {
@@ -84,89 +103,82 @@ export default {
       ],
       isWaiting: false,
       scrollTop: 0,
-      context: {}
+      context: {},
+      // 执行轨迹：{ runId, status: 'running'|'done', steps: [{stepId, tool, status, dependsOn, expect, output}] }
+      tracePanel: null
     }
   },
   methods: {
-    async sendMessage() {
+    sendMessage() {
       if (!this.inputText.trim() || this.isWaiting) return
       
       const userText = this.inputText
       this.messages.push({ role: 'user', type: 'text', content: userText })
       this.inputText = ''
       this.isWaiting = true
-      
-      try {
-        await run_agent(
-          userText, 
-          this.context,
-          (response) => {
-            this.handleAiResponse(response)
+      // 每次对话重置轨迹面板
+      this.tracePanel = { runId: null, status: 'running', steps: [] }
+      this.scrollToBottom()
+
+      const userId = uni.getStorageSync('userId') || 'default_user_001'
+
+      sendAgentMessage({
+        text: userText,
+        userId: userId,
+        sessionId: this.context.sessionId || null,
+        onPlan: (data) => {
+          this.tracePanel.runId = data.runId
+          this.tracePanel.steps = (data.plan && data.plan.steps || []).map(s => ({
+            stepId: s.stepId,
+            tool: s.tool,
+            status: s.status || 'PENDING',
+            dependsOn: s.dependsOn || [],
+            expect: s.expect || '',
+            output: s.output || null
+          }))
+          this.scrollToBottom()
+        },
+        onStep: (data) => {
+          const step = this.tracePanel.steps.find(x => x.stepId === data.stepId)
+          if (step) {
+            step.status = data.status
+            if (data.output) {
+              this.$set(step, 'output', data.output)
+            }
           }
-        )
-      } catch (error) {
-        console.error('请求失败:', error)
-        this.messages.push({ 
-          role: 'ai', 
-          type: 'text', 
-          content: '网络开小差了，请稍后再试。' 
-        })
-      } finally {
-        this.isWaiting = false
-        this.scrollToBottom()
+          this.scrollToBottom()
+        },
+        onDone: (data) => {
+          this.messages.push({ role: 'ai', type: 'text', content: data.content || '已完成。' })
+          if (this.tracePanel) this.tracePanel.status = 'done'
+          this.isWaiting = false
+          this.scrollToBottom()
+        },
+        onError: (data) => {
+          this.messages.push({ role: 'ai', type: 'text', content: data.message || '连接失败，请稍后再试。' })
+          if (this.tracePanel) this.tracePanel.status = 'done'
+          this.isWaiting = false
+          this.scrollToBottom()
+        }
+      })
+    },
+    
+    statusIcon(status) {
+      switch (status) {
+        case 'RUNNING': return '⏳'
+        case 'DONE': return '✅'
+        case 'FAILED': return '❌'
+        case 'SKIPPED': return '⏭️'
+        default: return '○'
       }
     },
     
-    handleAiResponse(response) {
-      switch (response.type) {
-        case 'restaurant_list':
-          this.messages.push({
-            role: 'ai',
-            type: 'restaurant_list',
-            data: response.data
-          })
-          break
-          
-        case 'dish_list':
-          this.messages.push({
-            role: 'ai',
-            type: 'dish_list',
-            data: response.data
-          })
-          break
-          
-        case 'order_success':
-          this.messages.push({
-            role: 'ai',
-            type: 'order_success',
-            content: response.content
-          })
-          break
-          
-        case 'payment_success':
-          this.messages.push({
-            role: 'ai',
-            type: 'payment_success',
-            content: response.content
-          })
-          break
-          
-        case 'order_update':
-          this.messages.push({
-            role: 'ai',
-            type: 'order_update',
-            content: response.content
-          })
-          break
-          
-        case 'text':
-        default:
-          this.messages.push({
-            role: 'ai',
-            type: 'text',
-            content: response.content || '抱歉，我有点困惑。'
-          })
-          break
+    formatOutput(output) {
+      try {
+        const s = JSON.stringify(output)
+        return s.length > 100 ? s.slice(0, 100) + '…' : s
+      } catch (e) {
+        return String(output)
       }
     },
     
@@ -239,6 +251,100 @@ export default {
   background: #007aff;
   color: #fff;
   border-bottom-right-radius: 6rpx;
+}
+
+.loading {
+  color: #999;
+  font-style: italic;
+}
+
+/* 执行轨迹面板 */
+.trace-panel {
+  background: #1f2430;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.trace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.trace-title {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+.trace-status {
+  color: #7ee787;
+  font-size: 22rpx;
+}
+
+.trace-status.running {
+  color: #ffd166;
+}
+
+.trace-step {
+  display: flex;
+  align-items: flex-start;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+
+.trace-step:last-child {
+  border-bottom: none;
+}
+
+.trace-icon {
+  font-size: 28rpx;
+  margin-right: 16rpx;
+  width: 36rpx;
+  text-align: center;
+}
+
+.st-running {
+  color: #ffd166;
+}
+
+.st-done {
+  color: #7ee787;
+}
+
+.st-failed {
+  color: #ff7b72;
+}
+
+.st-pending {
+  color: #8b949e;
+}
+
+.trace-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.trace-tool {
+  color: #e6edf3;
+  font-size: 26rpx;
+  font-weight: bold;
+}
+
+.trace-dep {
+  color: #8b949e;
+  font-size: 22rpx;
+  margin-top: 4rpx;
+}
+
+.trace-output {
+  color: #a5b4c4;
+  font-size: 20rpx;
+  margin-top: 6rpx;
+  word-break: break-all;
 }
 
 /* 餐厅列表卡片样式 */

@@ -1,0 +1,32 @@
+# ============================================================
+# 主配置：只放公共配置，环境差异交给 profile
+# 通过启动参数选择运行环境：
+#   本地：--spring.profiles.active=local   （默认）
+#   远程：--spring.profiles.active=remote
+# 也可用环境变量 SPRING_PROFILES_ACTIVE=remote 覆盖
+# ============================================================
+
+# 默认使用本地配置（不改代码时直接启动即可本地跑）
+spring:
+  profiles:
+    active: local
+  application:
+    name: online-ordering-system
+
+server:
+  port: 8080
+  address: 0.0.0.0
+
+# LLM 接入（OpenAI 兼容协议，密钥从环境变量 LLM_API_KEY 读取，不落盘）
+llm:
+  base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+  model: ${LLM_MODEL:qwen-plus}
+  api-key: ${LLM_API_KEY:}
+  timeout-seconds: 30
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id

@@ -1,9 +1,8 @@
-# ==================== Maven / Java 编译产物 ====================
+HELP.md
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-*.class
 
 ### STS ###
 .apt_generated
@@ -15,7 +14,7 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea/
+.idea
 *.iws
 *.iml
 *.ipr
@@ -27,22 +26,53 @@ target/
 /nbdist/
 /.nb-gradle/
 build/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
 
-### Node / UniApp 前端 ###
-node_modules/
-unpackage/
-dist/
-.hbuilderx/
+### 敏感配置：真实密码/密钥不入库（改放 application-local.properties 或环境变量） ###
+application-local.properties
+application-prod.properties
+application-dev.properties
+application - 副本.properties
+.env
+.env.*
+*.pem
+*.p12
+*.jks
+*.key
+*.keystore
+前端部分UniApp/**/config.js
 
 ### 敏感配置：本地真实配置仅留本地，仓库只提交模板 ###
 src/main/resources/application-local.properties
 src/main/resources/application.properties
+# 远程配置含真实服务器密码，一律不入库
+src/main/resources/application-remote.yml
 
-### 系统文件 ###
+### 大文件 / 临时文件 ###
+*.docx
+*.doc
+*.log
+*.tmp
 .DS_Store
 Thumbs.db
 HELP.md
 HELP.md
+
+### 工作区记忆 / 备份（不入库）###
+.workbuddy/
+.git-backup-*/
+
+### 本地数据库配置（含密码，不入库）###
+src/main/resources/application-local.yml
+
+### 个人笔记（不入库）###
+*准备-*.md
+
+### Python 缓存 / 产物 ###
+__pycache__/
+*.pyc
+*.pyo

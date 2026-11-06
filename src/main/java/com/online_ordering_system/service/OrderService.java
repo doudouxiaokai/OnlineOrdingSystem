@@ -24,11 +24,7 @@ public class OrderService {
     private final RestaurantMapper restaurantMapper;
     private final OrderReviewMapper orderReviewMapper;
     private final OrderItemMapper orderItemMapper;
-
-    private final List<Map<String, String>> VIRTUAL_RIDERS = Arrays.asList(
-            new HashMap<String, String>() {{ put("name", "张小哥"); put("phone", "13911112222"); }},
-            new HashMap<String, String>() {{ put("name", "王大叔"); put("phone", "13688889999"); }}
-    );
+    private final RiderMapper riderMapper;
 
     /**
      * 【修改点】创建订单时，状态设为 UNPAID，并设置10分钟后过期
@@ -98,6 +94,7 @@ public class OrderService {
             orderItem.setItemId(UUID.randomUUID().toString().replace("-", ""));
             orderItem.setOrderId(order.getOrderId());
             orderItem.setDishId(dishId);
+            orderItem.setDishName(dish.getName());   // 保存菜品名快照
             orderItem.setQuantity(quantity);
             orderItem.setSubtotal(dish.getPrice().multiply(BigDecimal.valueOf(quantity)));
 
@@ -193,18 +190,58 @@ public class OrderService {
         String currentStatus = order.getStatus();
         if ("PREPARING".equals(currentStatus)) {
             order.setStatus("DELIVERING");
-            int randomIndex = new Random().nextInt(VIRTUAL_RIDERS.size());
-            Map<String, String> selectedRider = VIRTUAL_RIDERS.get(randomIndex);
-            order.setRiderName(selectedRider.get("name"));
-            order.setRiderPhone(selectedRider.get("phone"));
+            assignRider(order);
         } else if ("DELIVERING".equals(currentStatus)) {
             order.setStatus("COMPLETED");
+            releaseRider(order);
         } else {
             throw new RuntimeException("当前订单状态已完结，无法继续流转");
         }
 
         orderMapper.updateById(order);
         return order;
+    }
+
+    /**
+     * 从骑手表挑选一名空闲骑手并绑定到订单（替代原先硬编码的 VIRTUAL_RIDERS）。
+     * 挑选策略：状态 ONLINE 且当前无配送订单，按累计单量降序（经验优先）。
+     * 无可用骑手时抛出明确异常，由调用方决定是否重试。
+     */
+    private void assignRider(Order order) {
+        List<Rider> riders = riderMapper.selectList(
+                new LambdaQueryWrapper<Rider>()
+                        .eq(Rider::getStatus, "ONLINE")
+                        .isNull(Rider::getCurrentOrderId)
+                        .orderByDesc(Rider::getDeliveredCount)
+        );
+
+        if (riders.isEmpty()) {
+            throw new RuntimeException("暂无空闲骑手，请稍后重试");
+        }
+
+        Rider rider = riders.get(0);
+        rider.setStatus("DELIVERING");
+        rider.setCurrentOrderId(order.getOrderId());
+        riderMapper.updateById(rider);
+
+        order.setRiderId(rider.getRiderId());
+        order.setRiderName(rider.getName());
+        order.setRiderPhone(rider.getPhone());
+    }
+
+    /**
+     * 订单送达后释放骑手，使其恢复接单状态。
+     */
+    private void releaseRider(Order order) {
+        if (order.getRiderId() == null) {
+            return;
+        }
+        Rider rider = riderMapper.selectById(order.getRiderId());
+        if (rider != null) {
+            rider.setStatus("ONLINE");
+            rider.setCurrentOrderId(null);
+            riderMapper.updateById(rider);
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

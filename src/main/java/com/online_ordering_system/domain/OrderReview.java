@@ -12,6 +12,7 @@ public class OrderReview {
     private String reviewId;
     private String orderId;
     private String restaurantId;
+    private String dishId;       // 菜品维度评价（可空，餐厅整体评价时为空）
     private String userId;
     private String username;
     private Integer rating;
